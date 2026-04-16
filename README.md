@@ -1,4 +1,4 @@
-# PES-VCS: Version Control System Lab Report
+# PES-VCS: Version Control System Report
 
 **Name:** Adarsh Prakash  
 
