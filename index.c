@@ -128,35 +128,93 @@ int index_status(const Index *index) {
 
 // ─── YOUR IMPLEMENTATION ─────────────────────────────────────────────────────
 
+// ───────────── Load Index from Disk ─────────────
+// Reads the staging area (.pes/index) into memory
+// and populates the Index structure.
+
 int index_load(Index *idx) {
+
+    // Open index file in binary read mode
     FILE *fp = fopen(".pes/index", "rb");
 
+
+    // ───────────── Case: Index file does not exist ─────────────
+    // This happens on first run (no files staged yet)
     if (!fp) {
-        idx->count = 0;
+        idx->count = 0;   // Initialize empty index
         return 0;
     }
 
+
+    // ───────────── Step 1: Read number of entries ─────────────
     fread(&idx->count, sizeof(int), 1, fp);
 
+
+    // ───────────── Step 2: Validate entry count ─────────────
+    // Prevent overflow or corrupted index file
     if (idx->count > MAX_INDEX_ENTRIES) {
         fclose(fp);
         return -1;
     }
 
-    fread(idx->entries, sizeof(IndexEntry), idx->count, fp);
 
+    // ───────────── Step 3: Read all entries ─────────────
+    fread(
+        idx->entries,
+        sizeof(IndexEntry),
+        idx->count,
+        fp
+    );
+
+
+    // ───────────── Step 4: Close file ─────────────
     fclose(fp);
+
+
+    // ───────────── Load successful ─────────────
     return 0;
 }
 
+
+
+// ───────────── Save Index to Disk ─────────────
+// Writes the current staging area into .pes/index
+// in binary format.
+
 int index_save(const Index *idx) {
+
+    // Open index file in binary write mode
     FILE *fp = fopen(".pes/index", "wb");
-    if (!fp) return -1;
 
-    fwrite(&idx->count, sizeof(int), 1, fp);
-    fwrite(idx->entries, sizeof(IndexEntry), idx->count, fp);
+    // Check if file opening failed
+    if (!fp) {
+        return -1;
+    }
 
+
+    // ───────────── Step 1: Write entry count ─────────────
+    fwrite(
+        &idx->count,
+        sizeof(int),
+        1,
+        fp
+    );
+
+
+    // ───────────── Step 2: Write index entries ─────────────
+    fwrite(
+        idx->entries,
+        sizeof(IndexEntry),
+        idx->count,
+        fp
+    );
+
+
+    // ───────────── Step 3: Close file ─────────────
     fclose(fp);
+
+
+    // ───────────── Save successful ─────────────
     return 0;
 }
 
