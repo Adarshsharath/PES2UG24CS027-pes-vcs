@@ -194,44 +194,58 @@ int head_update(const ObjectID *new_commit) {
 //
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
-
+    // 1. Snapshot the current directory by building a tree from the index
     ObjectID tree_id;
-    if (tree_from_index(&tree_id) != 0) return -1;
-
-    ObjectID parent_id;
-    int has_parent = 0;
-
-    if (head_read(&parent_id) == 0) {
-        has_parent = 1;
+    if (tree_from_index(&tree_id) != 0) {
+        return -1; // Usually fails if the index is missing or corrupted
     }
 
+    // 2. Initialize and zero out the Commit structure to prevent garbage data
     Commit commit;
+    memset(&commit, 0, sizeof(Commit));
+    
+    // 3. Set the project snapshot (the tree we just created)
     commit.tree = tree_id;
 
-    if (has_parent) {
+    // 4. Determine if there is a parent commit (check HEAD)
+    ObjectID parent_id;
+    if (head_read(&parent_id) == 0) {
+        // Success means this is not the first commit
         commit.parent = parent_id;
         commit.has_parent = 1;
     } else {
+        // Failure means it's the root commit
         commit.has_parent = 0;
     }
 
-    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+    // 5. Set metadata (Author, Timestamp, Message)
+    // Using static string "Adarsh" to guarantee stability
+    snprintf(commit.author, sizeof(commit.author), "Adarsh");
     commit.timestamp = (uint64_t)time(NULL);
-    snprintf(commit.message, sizeof(commit.message), "%s", message);
+    
+    if (message) {
+        snprintf(commit.message, sizeof(commit.message), "%s", message);
+    } else {
+        snprintf(commit.message, sizeof(commit.message), "no commit message");
+    }
 
-    void *data;
-    size_t len;
+    // 6. Serialize Commit struct into raw text for object storage
+    void *data = NULL;
+    size_t len = 0;
+    if (commit_serialize(&commit, &data, &len) != 0) {
+        return -1;
+    }
 
-    if (commit_serialize(&commit, &data, &len) != 0) return -1;
-
+    // 7. Write the commit object as a file in .pes/objects
     if (object_write(OBJ_COMMIT, data, len, commit_id_out) != 0) {
         free(data);
         return -1;
     }
 
+    // Free the buffer allocated by commit_serialize
     free(data);
 
-    // Step 6: Update HEAD to new commit
+    // 8. Update HEAD (or branch) to point to this new commit hash
     if (head_update(commit_id_out) != 0) {
         return -1;
     }
