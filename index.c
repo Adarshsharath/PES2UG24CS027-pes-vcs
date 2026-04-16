@@ -218,56 +218,106 @@ int index_save(const Index *idx) {
     return 0;
 }
 
-int index_add(Index *idx, const char *path) {
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return -1;
+// ───────────── Add File to Index (Staging Area) ─────────────
+// This function:
+// 1. Reads file contents
+// 2. Stores it as a blob object
+// 3. Updates or inserts entry in index
+// 4. Saves index to disk
 
+int index_add(Index *idx, const char *path) {
+
+    // ───────────── Step 1: Open file ─────────────
+    FILE *fp = fopen(path, "rb");
+
+    if (!fp) {
+        return -1;   // File could not be opened
+    }
+
+
+    // ───────────── Step 2: Determine file size ─────────────
     fseek(fp, 0, SEEK_END);
+
     long size = ftell(fp);
+
     rewind(fp);
 
+
+    // ───────────── Step 3: Allocate buffer ─────────────
     void *data = malloc(size);
+
     if (!data) {
         fclose(fp);
         return -1;
     }
 
+
+    // ───────────── Step 4: Read file content ─────────────
     fread(data, 1, size, fp);
+
     fclose(fp);
 
-    ObjectID id;t
+
+    // ───────────── Step 5: Store file as blob object ─────────────
+    ObjectID id;
+
     if (object_write(OBJ_BLOB, data, size, &id) != 0) {
         free(data);
         return -1;
     }
 
+    // Free temporary buffer
     free(data);
 
-    struct stat st;
-    if (stat(path, &st) != 0) return -1;
 
-    // update existing
+    // ───────────── Step 6: Get file metadata ─────────────
+    struct stat st;
+
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+
+
+    // ───────────── Step 7: Check if file already exists in index ─────────────
     for (int i = 0; i < idx->count; i++) {
+
         if (strcmp(idx->entries[i].path, path) == 0) {
+
+            // Update existing entry
             idx->entries[i].hash = id;
             idx->entries[i].size = st.st_size;
             idx->entries[i].mtime_sec = st.st_mtime;
             idx->entries[i].mode = st.st_mode;
 
+            // Save updated index to disk
             return index_save(idx);   // 🔥 critical
         }
     }
 
-    // new entry
-    if (idx->count >= MAX_INDEX_ENTRIES) return -1;
 
+    // ───────────── Step 8: Add new entry ─────────────
+    if (idx->count >= MAX_INDEX_ENTRIES) {
+        return -1;   // Prevent overflow
+    }
+
+
+    // Store file path
     strcpy(idx->entries[idx->count].path, path);
+
+    // Store hash (blob reference)
     idx->entries[idx->count].hash = id;
+
+    // Store metadata
     idx->entries[idx->count].size = st.st_size;
     idx->entries[idx->count].mtime_sec = st.st_mtime;
     idx->entries[idx->count].mode = st.st_mode;
 
+
+    // Increment entry count
     idx->count++;
-    //fixed this error here idx error
+
+
+    // ───────────── Step 9: Save index to disk ─────────────
+    // This ensures persistence since pes.c does NOT call index_save()
     return index_save(idx);
 }
