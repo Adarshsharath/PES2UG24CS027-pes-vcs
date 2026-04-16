@@ -1,13 +1,37 @@
-#include "index.h"
-#include "pes.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <dirent.h>
+// ───────────── Header Files for Index Module ─────────────
 
+// Provides definitions for Index, IndexEntry, and related functions
+#include "index.h"
+
+// Provides core PES structures and object storage functions (e.g., object_write)
+#include "pes.h"
+
+
+// ───────────── Standard Library Headers ─────────────
+
+// Input/output operations (fopen, fread, fwrite, printf, etc.)
+#include <stdio.h>
+
+// Memory management (malloc, free, exit)
+#include <stdlib.h>
+
+// String manipulation functions (strcmp, strcpy, strlen, memcpy, etc.)
+#include <string.h>
+
+
+// ───────────── System Headers ─────────────
+
+// File metadata operations (stat, file size, modification time)
+#include <sys/stat.h>
+
+// File control options (low-level file descriptors, flags)
+#include <fcntl.h>
+
+// POSIX system calls (read, write, close, access, etc.)
+#include <unistd.h>
+
+// Directory handling (opendir, readdir, closedir)
+#include <dirent.h>
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 IndexEntry* index_find(Index *index, const char *path) {
@@ -152,7 +176,7 @@ int index_add(Index *idx, const char *path) {
     fread(data, 1, size, fp);
     fclose(fp);
 
-    ObjectID id;
+    ObjectID id;t
     if (object_write(OBJ_BLOB, data, size, &id) != 0) {
         free(data);
         return -1;
