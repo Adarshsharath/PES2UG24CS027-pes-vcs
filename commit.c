@@ -195,13 +195,9 @@ int head_update(const ObjectID *new_commit) {
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
 
-    // Step 1: Build tree
     ObjectID tree_id;
-    if (tree_from_index(&tree_id) != 0) {
-        return -1;
-    }
+    if (tree_from_index(&tree_id) != 0) return -1;
 
-    // Step 2: Read parent commit (if exists)
     ObjectID parent_id;
     int has_parent = 0;
 
@@ -209,9 +205,7 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         has_parent = 1;
     }
 
-    // Step 3: Fill commit struct
     Commit commit;
-
     commit.tree = tree_id;
 
     if (has_parent) {
@@ -221,14 +215,25 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         commit.has_parent = 0;
     }
 
-    // Set author
     snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
-
-    // Set timestamp
     commit.timestamp = (uint64_t)time(NULL);
-
-    // Set message
     snprintf(commit.message, sizeof(commit.message), "%s", message);
+
+    // Step 4: Serialize commit
+    void *data;
+    size_t len;
+
+    if (commit_serialize(&commit, &data, &len) != 0) {
+        return -1;
+    }
+
+    // Step 5: Write commit object
+    if (object_write(OBJ_COMMIT, data, len, commit_id_out) != 0) {
+        free(data);
+        return -1;
+    }
+
+    free(data);
 
     return 0;
 }
