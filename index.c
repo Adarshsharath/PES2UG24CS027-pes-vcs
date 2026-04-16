@@ -209,6 +209,6 @@ int index_add(Index *idx, const char *path) {
     idx->entries[idx->count].mode = st.st_mode;
 
     idx->count++;
-
-    return index_save(idx);   // 🔥 critical
+    //fixed this error here idx error
+    return index_save(idx);
 }
