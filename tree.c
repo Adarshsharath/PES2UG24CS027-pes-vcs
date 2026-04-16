@@ -319,11 +319,45 @@ static int build_tree(IndexEntry *entries, int count, const char *prefix, Object
     return 0;
 }
 
+// ───────────── Build Tree from Index ─────────────
+// This function acts as the entry point for constructing
+// a tree object from the current staging area (index).
+//
+// It loads all staged files and then delegates the actual
+// tree construction to the recursive helper function.
+
 int tree_from_index(ObjectID *id_out) {
+
+    // ───────────── Step 1: Declare Index structure ─────────────
+    // This will hold all staged entries (files added via `pes add`)
     Index idx;
 
-    if (index_load(&idx) != 0)
-        return -1;
 
-    return build_tree(idx.entries, idx.count, "", id_out);
+    // ───────────── Step 2: Load index from disk ─────────────
+    // Reads .pes/index into memory
+    int load_status = index_load(&idx);
+
+    // If loading fails, return error
+    if (load_status != 0) {
+        return -1;
+    }
+
+
+    // ───────────── Step 3: Build tree recursively ─────────────
+    // Pass:
+    //   - all index entries
+    //   - total number of entries
+    //   - empty prefix (root level)
+    //   - output ObjectID for resulting tree
+    int result = build_tree(
+        idx.entries,
+        idx.count,
+        "",
+        id_out
+    );
+
+
+    // ───────────── Step 4: Return result ─────────────
+    // Success (0) or failure (-1)
+    return result;
 }
