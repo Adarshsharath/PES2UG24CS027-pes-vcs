@@ -1,7 +1,8 @@
 # PES-VCS: Version Control System Lab Report
 
-**Student Name:** Adarsh  
-**SRN:** [Your SRN Here]  
+**Student Name:** Adarsh Prakash  
+**SRN:** PES2UG24CS027
+**Section:** A
 **Course:** Operating Systems (Phase 4 VCS Lab)
 
 ---
@@ -93,7 +94,8 @@ This final implementation phase ties everything together into a commit object, c
 All modules (Object, Tree, Index, Commit) were integrated into the main `pes` binary. The system supports full versioning workflows including initializing repos, staging changes, and viewing persistent history.
 
 **📸 Screenshot Final: Full integration test output (`bash test_sequence.sh`)**  
-![Integration Tests](screenshots/Final/final1.jpeg)(screenshots/Final/final2.jpeg)
+![Integration Tests](screenshots/Final/final1.jpeg)
+![Integration Tests](screenshots/Final/final2.jpeg)
 
 ---
 
