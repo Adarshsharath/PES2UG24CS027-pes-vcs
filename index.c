@@ -35,6 +35,7 @@
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 IndexEntry* index_find(Index *index, const char *path) {
+    //Loop to tun till index->count ad compare the string using strcmp and return entries
     for (int i = 0; i < index->count; i++) {
         if (strcmp(index->entries[i].path, path) == 0)
             return &index->entries[i];
