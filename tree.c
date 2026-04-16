@@ -135,7 +135,7 @@ int tree_parse(const void *data, size_t len, Tree *tree_out) {
 
 
         // ───────────── Step 4: Increment entry count ─────────────
-        tree_out->count++;
+        tree_out->count++;//incrementing
     }
 
 
