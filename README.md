@@ -531,15 +531,65 @@ The following questions cover filesystem concepts beyond the implementation scop
 
 **Q5.1:** A branch in Git is just a file in `.git/refs/heads/` containing a commit hash. Creating a branch is creating a file. Given this, how would you implement `pes checkout <branch>` — what files need to change in `.pes/`, and what must happen to the working directory? What makes this operation complex?
 
+**Answer:**
+To implement `pes checkout <branch>`, two main steps are required:
+1.  **Reference Update:** The `.pes/HEAD` file must be updated to point to the new branch (e.g., `ref: refs/heads/new-branch`). If the branch doesn't exist, the operation should fail.
+2.  **Working Directory Synchronization:** The project files in the working directory must be replaced with the exact snapshots stored in the target branch's tree. This involves:
+    *   Walking the tree of the target commit.
+    *   Reading the corresponding blobs from `.pes/objects`.
+    *   Writing those blobs back to the physical files on disk.
+    *   Deleting files that exist in the current directory but are not present in the target branch's tree.
+
+**Complexity:** The operation is complex because it must handle **uncommitted changes**. If a user has modified a file but hasn't committed it, `checkout` might overwrite those changes. A robust implementation needs to perform a "safety check" (using the index) and refuse to checkout if data loss is imminent.
+
 **Q5.2:** When switching branches, the working directory must be updated to match the target branch's tree. If the user has uncommitted changes to a tracked file, and that file differs between branches, checkout must refuse. Describe how you would detect this "dirty working directory" conflict using only the index and the object store.
 
+**Answer:**
+We can detect a "dirty" state by comparing three sources of truth:
+1.  **Working Directory vs. Index:** Compare the `mtime` and `size` of the physical file on disk with the values stored in `.pes/index`. If they differ, the file is "modified" (unstaged changes).
+2.  **Index vs. HEAD:** Compare the hash stored in the index for a given path with the hash stored in the current `HEAD` commit's tree. If they differ, the file is "staged" (uncommitted changes).
+
+If either comparison shows a mismatch for a file that is also different in the target branch we are moving to, we have a conflict. The system should read the index entries, calculate the current state, and refuse the switch if any tracked file is currently "dirty."
+
 **Q5.3:** "Detached HEAD" means HEAD contains a commit hash directly instead of a branch reference. What happens if you make commits in this state? How could a user recover those commits?
+
+**Answer:**
+If you make commits in a "Detached HEAD" state:
+*   The new commit is created normally and its parent points to the previous commit.
+*   However, `.pes/HEAD` is updated to point directly to the *new* commit hash instead of a branch name.
+*   Since no branch (ref) "owns" this commit, as soon as you checkout another branch, you "lose" the pointer to that commit.
+
+**Recovery:** The user can recover these commits by looking at the terminal output where the commit hash was printed (PES prints the hash on success) or by manually inspecting the objects in `.pes/objects` using `find` and `xxd` to identify the most recent commit object. Once the hash is found, the user can create a new branch pointing to that hash: `echo <hash> > .pes/refs/heads/recovered-branch`.
 
 ### Garbage Collection and Space Reclamation
 
 **Q6.1:** Over time, the object store accumulates unreachable objects — blobs, trees, or commits that no branch points to (directly or transitively). Describe an algorithm to find and delete these objects. What data structure would you use to track "reachable" hashes efficiently? For a repository with 100,000 commits and 50 branches, estimate how many objects you'd need to visit.
 
+**Answer:**
+The standard algorithm is **Mark-and-Sweep**:
+1.  **Initialization:** Create a **HashSet** (to avoid duplicates) of all "reachable" hashes.
+2.  **Mark Phase:**
+    *   Iterate through all branch references in `.pes/refs/heads/` and the `HEAD` file.
+    *   For each hash found, add it to the set and start a recursive traversal.
+    *   For Commits: Mark the tree hash and the parent hashes.
+    *   For Trees: Mark each entry's hash. If the entry is another tree, recurse.
+    *   For Blobs: Just mark the hash (leaf nodes).
+3.  **Sweep Phase:** Iterate through all files in `.pes/objects/`. If a file's hash is NOT in the reachability set, delete it.
+
+**Estimation:** For 100,000 commits and 50 branches, you would need to visit at least the 100,000 commit objects. If each commit represents a unique project version with ~100 files, you might visit several million objects during the traversal, although deduplication (identical subtrees) would significantly reduce the actual number of nodes visited.
+
 **Q6.2:** Why is it dangerous to run garbage collection concurrently with a commit operation? Describe a race condition where GC could delete an object that a concurrent commit is about to reference. How does Git's real GC avoid this?
+
+**Answer:**
+It is dangerous because GC might delete objects that are "in-flight" but not yet referenced by a branch.
+
+**Race Condition:**
+*   **Process A (Commit):** Calculates the hash for a new blob, writes the blob file to `.pes/objects/a1/b2...`, but hasn't yet updated the index or the commit object to point to it.
+*   **Process B (GC):** Starts the Mark phase. Since the new blob isn't yet part of any branch history, it isn't "marked."
+*   **Process B (GC):** Enters the Sweep phase and deletes the "unreachable" blob `a1/b2...`.
+*   **Process A (Commit):** Tries to finish the commit by pointing to the blob `a1/b2...`, but the file is gone, resulting in a corrupted repository.
+
+**Git's Solution:** Real Git uses an **mtime-based grace period** (pruning). By default, `git gc` will only delete objects that are older than a certain age (e.g., 2 weeks). Any object created very recently is assumed to be part of an ongoing operation and is spared from deletion.
 
 ---
 
