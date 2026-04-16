@@ -230,47 +230,98 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 }
 // ─────────────── YOUR IMPLEMENTATION ───────────────
 
+// ───────────── Recursive Tree Builder ─────────────
+// This function constructs a tree object from index entries.
+//
+// It groups files by directory structure and recursively
+// builds subtrees for nested directories.
+//
+// Parameters:
+//   entries  → list of index entries
+//   count    → number of entries
+//   prefix   → current directory prefix
+//   id_out   → resulting tree object hash
+
 static int build_tree(IndexEntry *entries, int count, const char *prefix, ObjectID *id_out) {
+
+    // ───────────── Step 1: Initialize Tree ─────────────
     Tree tree;
     tree.count = 0;
 
     int i = 0;
 
+
+    // ───────────── Step 2: Iterate through entries ─────────────
     while (i < count) {
+
+        // Get full file path
         const char *path = entries[i].path;
 
+        // Relative path (after removing prefix)
         const char *rel = path;
+
+
+        // ───────────── Step 2A: Strip prefix ─────────────
         if (prefix && strlen(prefix) > 0) {
+
+            // Skip entries not belonging to current prefix
             if (strncmp(path, prefix, strlen(prefix)) != 0) {
                 i++;
                 continue;
             }
+
+            // Move pointer to relative part
             rel = path + strlen(prefix);
         }
 
+
+        // ───────────── Step 2B: Check for subdirectory ─────────────
         char *slash = strchr(rel, '/');
 
+
+        // ───────────── CASE 1: FILE (no slash) ─────────────
         if (!slash) {
+
+            // Add file entry directly to tree
             TreeEntry *entry = &tree.entries[tree.count++];
 
             entry->mode = MODE_FILE;
+
+            // Store file name
             strcpy(entry->name, rel);
-            entry->hash = entries[i].hash;   // ✅ FIXED
 
+            // Store file hash (blob)
+            entry->hash = entries[i].hash;
+
+            // Move to next entry
             i++;
-        } else {
-            char dirname[256];
-            int len = slash - rel;
-            strncpy(dirname, rel, len);
-            dirname[len] = '\0';
+        }
 
+
+        // ───────────── CASE 2: DIRECTORY (has slash) ─────────────
+        else {
+
+            // ───────────── Extract directory name ─────────────
+            char dirname[256];
+
+            int len = slash - rel;
+
+            strncpy(dirname, rel, len);
+
+            dirname[len] = '\0';   // null terminate
+
+
+            // ───────────── Step 2C: Collect sub-entries ─────────────
             IndexEntry sub_entries[256];
             int sub_count = 0;
 
             int j = i;
+
             while (j < count) {
+
                 const char *p = entries[j].path;
 
+                // Apply prefix stripping again
                 if (prefix && strlen(prefix) > 0) {
                     if (strncmp(p, prefix, strlen(prefix)) != 0) {
                         j++;
@@ -279,43 +330,70 @@ static int build_tree(IndexEntry *entries, int count, const char *prefix, Object
                     p += strlen(prefix);
                 }
 
+                // Check if entry belongs to this directory
                 if (strncmp(p, dirname, len) == 0 && p[len] == '/') {
                     sub_entries[sub_count++] = entries[j];
                 }
+
                 j++;
             }
 
+
+            // ───────────── Step 2D: Build new prefix ─────────────
             char new_prefix[512];
-            if (prefix && strlen(prefix) > 0)
+
+            if (prefix && strlen(prefix) > 0) {
                 snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, dirname);
-            else
+            } else {
                 snprintf(new_prefix, sizeof(new_prefix), "%s/", dirname);
+            }
 
+
+            // ───────────── Step 2E: Recursive call ─────────────
             ObjectID sub_id;
-            if (build_tree(sub_entries, sub_count, new_prefix, &sub_id) != 0)
-                return -1;
 
+            if (build_tree(sub_entries, sub_count, new_prefix, &sub_id) != 0) {
+                return -1;
+            }
+
+
+            // ───────────── Step 2F: Add directory entry ─────────────
             TreeEntry *entry = &tree.entries[tree.count++];
+
             entry->mode = MODE_DIR;
+
             strcpy(entry->name, dirname);
+
             entry->hash = sub_id;
 
+
+            // Skip all processed entries
             i += sub_count;
         }
     }
 
+
+    // ───────────── Step 3: Serialize tree ─────────────
     void *data;
     size_t len;
 
-    if (tree_serialize(&tree, &data, &len) != 0)
+    if (tree_serialize(&tree, &data, &len) != 0) {
         return -1;
+    }
 
+
+    // ───────────── Step 4: Write tree object ─────────────
     if (object_write(OBJ_TREE, data, len, id_out) != 0) {
         free(data);
         return -1;
     }
 
+
+    // ───────────── Step 5: Cleanup ─────────────
     free(data);
+
+
+    // ───────────── Step 6: Success ─────────────
     return 0;
 }
 
