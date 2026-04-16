@@ -195,13 +195,40 @@ int head_update(const ObjectID *new_commit) {
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
 
-    // Step 1: Build tree from index
+    // Step 1: Build tree
     ObjectID tree_id;
-
     if (tree_from_index(&tree_id) != 0) {
         return -1;
     }
 
-    // Temporary return (we'll expand later)
+    // Step 2: Read parent commit (if exists)
+    ObjectID parent_id;
+    int has_parent = 0;
+
+    if (head_read(&parent_id) == 0) {
+        has_parent = 1;
+    }
+
+    // Step 3: Fill commit struct
+    Commit commit;
+
+    commit.tree = tree_id;
+
+    if (has_parent) {
+        commit.parent = parent_id;
+        commit.has_parent = 1;
+    } else {
+        commit.has_parent = 0;
+    }
+
+    // Set author
+    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+
+    // Set timestamp
+    commit.timestamp = (uint64_t)time(NULL);
+
+    // Set message
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
+
     return 0;
 }
