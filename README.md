@@ -1,9 +1,13 @@
 # PES-VCS: Version Control System Lab Report
 
-**Student Name:** Adarsh Prakash  
+**Name:** Adarsh Prakash  
+
 **SRN:** PES2UG24CS027
+
 **Section:** A
-**Course:** Operating Systems (Phase 4 VCS Lab)
+
+**Course:** Operating Systems (Unit 4 – Orange Program Assignment)
+
 
 ---
 
