@@ -7,54 +7,139 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#define MODE_FILE      0100644
-#define MODE_EXEC      0100755
-#define MODE_DIR       0040000
+// ───────────── Mode Constants ─────────────
+// These represent file types in octal format (similar to Git)
 
+#define MODE_FILE      0100644   // Regular file
+#define MODE_EXEC      0100755   // Executable file
+#define MODE_DIR       0040000   // Directory
+
+
+// ───────────── Determine File Mode ─────────────
+// Returns mode based on file type and permissions
 uint32_t get_file_mode(const char *path) {
-    struct stat st;
-    if (lstat(path, &st) != 0) return 0;
 
-    if (S_ISDIR(st.st_mode))  return MODE_DIR;
-    if (st.st_mode & S_IXUSR) return MODE_EXEC;
+    struct stat st;
+
+    // Retrieve file metadata
+    if (lstat(path, &st) != 0) {
+        return 0;
+    }
+
+    // Check if path is a directory
+    if (S_ISDIR(st.st_mode)) {
+        return MODE_DIR;
+    }
+
+    // Check if executable bit is set
+    if (st.st_mode & S_IXUSR) {
+        return MODE_EXEC;
+    }
+
+    // Default: regular file
     return MODE_FILE;
 }
 
+
+// ───────────── Parse Tree Object ─────────────
+// Converts raw binary tree data into a Tree struct
 int tree_parse(const void *data, size_t len, Tree *tree_out) {
+
+    // Initialize tree entry count
     tree_out->count = 0;
+
+    // Set pointer to start of data
     const uint8_t *ptr = (const uint8_t *)data;
+
+    // Define end pointer for bounds checking
     const uint8_t *end = ptr + len;
 
+
+    // ───────────── Iterate through entries ─────────────
     while (ptr < end && tree_out->count < MAX_TREE_ENTRIES) {
+
+        // Get reference to next tree entry
         TreeEntry *entry = &tree_out->entries[tree_out->count];
 
-        const uint8_t *space = memchr(ptr, ' ', end - ptr);
-        if (!space) return -1;
 
+        // ───────────── Step 1: Parse mode ─────────────
+
+        // Locate space separating mode and name
+        const uint8_t *space = memchr(ptr, ' ', end - ptr);
+
+        if (!space) {
+            return -1;   // Malformed entry
+        }
+
+        // Extract mode string
         char mode_str[16] = {0};
-        size_t mode_len = space - ptr;
-        if (mode_len >= sizeof(mode_str)) return -1;
+
+        size_t mode_len = (size_t)(space - ptr);
+
+        // Ensure mode string fits buffer
+        if (mode_len >= sizeof(mode_str)) {
+            return -1;
+        }
+
+        // Copy mode string
         memcpy(mode_str, ptr, mode_len);
+
+        // Convert string → integer (octal)
         entry->mode = strtol(mode_str, NULL, 8);
 
+
+        // Move pointer past space
         ptr = space + 1;
 
-        const uint8_t *null_byte = memchr(ptr, '\0', end - ptr);
-        if (!null_byte) return -1;
 
-        size_t name_len = null_byte - ptr;
-        if (name_len >= sizeof(entry->name)) return -1;
+        // ───────────── Step 2: Parse name ─────────────
+
+        // Find null terminator after name
+        const uint8_t *null_byte = memchr(ptr, '\0', end - ptr);
+
+        if (!null_byte) {
+            return -1;   // Malformed entry
+        }
+
+        // Calculate name length
+        size_t name_len = (size_t)(null_byte - ptr);
+
+        // Ensure name fits buffer
+        if (name_len >= sizeof(entry->name)) {
+            return -1;
+        }
+
+        // Copy name
         memcpy(entry->name, ptr, name_len);
+
+        // Add null terminator
         entry->name[name_len] = '\0';
 
+
+        // Move pointer past null byte
         ptr = null_byte + 1;
 
-        if (ptr + HASH_SIZE > end) return -1;
+
+        // ───────────── Step 3: Parse hash ─────────────
+
+        // Ensure enough bytes remain for hash
+        if (ptr + HASH_SIZE > end) {
+            return -1;
+        }
+
+        // Copy hash (raw 32 bytes)
         memcpy(entry->hash.hash, ptr, HASH_SIZE);
+
+        // Advance pointer
         ptr += HASH_SIZE;
 
+
+        // ───────────── Step 4: Increment entry count ─────────────
         tree_out->count++;
     }
+
+
+    // ───────────── Parsing complete ─────────────
     return 0;
 }
 
